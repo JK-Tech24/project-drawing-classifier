@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import os
 import time
 
@@ -44,13 +45,30 @@ st.write(
 
 
 # ---------------------------------------------------------
+# Safe token diagnostic
+# ---------------------------------------------------------
+
+if CREWAI_API_TOKEN:
+    token_fingerprint = hashlib.sha256(
+        CREWAI_API_TOKEN.encode()
+    ).hexdigest()[:10]
+
+    st.caption(
+        f"Token loaded: length={len(CREWAI_API_TOKEN)}, "
+        f"fingerprint={token_fingerprint}"
+    )
+else:
+    st.caption("Token loaded: NO")
+
+
+# ---------------------------------------------------------
 # Check configuration
 # ---------------------------------------------------------
 
 if not CREWAI_API_TOKEN:
     st.warning(
         "CrewAI API token is not configured. "
-        "Add CREWAI_API_TOKEN to the .env file."
+        "Add CREWAI_API_TOKEN to the Streamlit secrets."
     )
 
 
@@ -83,7 +101,7 @@ if uploaded_file is not None:
 
         if not CREWAI_API_TOKEN:
             st.error(
-                "CREWAI_API_TOKEN is missing from the .env file."
+                "CREWAI_API_TOKEN is missing."
             )
             st.stop()
 
@@ -176,7 +194,6 @@ if uploaded_file is not None:
 
                 status_data = status_response.json()
 
-                # CrewAI uses "state"
                 state_value = (
                     status_data.get("state")
                     or status_data.get("status")
@@ -265,7 +282,6 @@ if uploaded_file is not None:
                     if key in result:
 
                         found_fields = True
-
                         value = result[key]
 
                         if key == "confidence":
