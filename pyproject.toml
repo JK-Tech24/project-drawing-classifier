@@ -9,6 +9,8 @@ dependencies = [
     "google-genai>=1.65.0",
     "pymupdf>=1.26.7",
     "python-dotenv>=1.2.3",
+    "requests>=2.34.2",
+    "streamlit>=1.63.0",
 ]
 
 [project.scripts]

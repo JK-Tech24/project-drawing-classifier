@@ -1,12 +1,12 @@
-from tkinter import Tk, filedialog
-
+import base64
 import os
 import re
-from pathlib import Path
+import tempfile
 from datetime import datetime
+from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 
 from crewai import Agent, Task, Crew, Process
 from crewai.flow import Flow, start, listen
@@ -21,22 +21,12 @@ from project_drawing_classifier.tools.drawing_pdf_reader import (
 # -------------------------------------------------
 
 class DrawingClassifierState(BaseModel):
-    pdf_path: str = ""
-    pdf_text: str = ""
+    # Only these two fields are exposed by AMP as Flow inputs.
+    drawing_filename: str = ""
+    drawing_pdf_b64: str = ""
 
-    drawing_title: str = ""
-    drawing_number: str = ""
-    discipline: str = ""
-    confidence: int = 0
-    reason: str = ""
-
-    routing_decision: str = ""
-    human_review_required: str = ""
-    reviewer_name: str = ""
-    final_discipline: str = ""
-    final_action: str = ""
-
-    audit_record: str = ""
+    # Everything else stays internal to the running Flow.
+    _internal: dict = PrivateAttr(default_factory=dict)
 
 
 # -------------------------------------------------
@@ -46,7 +36,7 @@ class DrawingClassifierState(BaseModel):
 class ProjectDrawingClassifierFlow(Flow[DrawingClassifierState]):
 
     @start()
-    def choose_and_read_pdf(self):
+    def receive_and_read_pdf(self):
 
         # -----------------------------------------
         # LOAD ENVIRONMENT
@@ -57,68 +47,121 @@ class ProjectDrawingClassifierFlow(Flow[DrawingClassifierState]):
 
         load_dotenv(
             dotenv_path=env_file,
-            override=True,
+            override=False,
         )
 
         if not os.getenv("GEMINI_API_KEY"):
             raise RuntimeError(
-                "GEMINI_API_KEY was not found in .env"
+                "GEMINI_API_KEY was not found in the environment."
             )
 
         print("\nGemini API key loaded successfully.")
 
         # -----------------------------------------
-        # CHOOSE PDF
+        # VALIDATE INPUTS
         # -----------------------------------------
 
-        root = Tk()
-        root.withdraw()
+        filename = (self.state.drawing_filename or "").strip()
+        encoded_pdf = (self.state.drawing_pdf_b64 or "").strip()
 
-        pdf_path = filedialog.askopenfilename(
-            title="Choose Drawing PDF",
-            filetypes=[
-                ("PDF Files", "*.pdf")
-            ],
-        )
-
-        root.destroy()
-
-        if not pdf_path:
+        if not filename:
             raise RuntimeError(
-                "No PDF selected."
+                "drawing_filename is required."
             )
 
-        self.state.pdf_path = pdf_path
-
-        # -----------------------------------------
-        # READ PDF USING CUSTOM CREWAI TOOL
-        # -----------------------------------------
-
-        reader = DrawingPDFReaderTool()
-
-        pdf_result = reader.run(
-            file_path=pdf_path
-        )
-
-        print(
-            "\n================ PDF READER ================\n"
-        )
-
-        print(pdf_result)
-
-        if not pdf_result.startswith(
-            "PDF_READ_SUCCESS"
-        ):
+        if not filename.lower().endswith(".pdf"):
             raise RuntimeError(
-                "PDF could not be read."
+                "The uploaded drawing must be a PDF file."
             )
 
-        self.state.pdf_text = pdf_result
+        if not encoded_pdf:
+            raise RuntimeError(
+                "drawing_pdf_b64 is required."
+            )
 
-        return pdf_result
+        # Support both plain Base64 and data-URL format.
+        if encoded_pdf.startswith("data:"):
+            try:
+                encoded_pdf = encoded_pdf.split(",", 1)[1]
+            except IndexError as exc:
+                raise RuntimeError(
+                    "Invalid PDF data URL."
+                ) from exc
+
+        # Remove whitespace/newlines that may be introduced in transport.
+        encoded_pdf = re.sub(r"\s+", "", encoded_pdf)
+
+        # -----------------------------------------
+        # DECODE PDF TO TEMPORARY FILE
+        # -----------------------------------------
+
+        try:
+            pdf_bytes = base64.b64decode(
+                encoded_pdf,
+                validate=True,
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "drawing_pdf_b64 is not valid Base64."
+            ) from exc
+
+        if not pdf_bytes.startswith(b"%PDF"):
+            raise RuntimeError(
+                "Decoded content is not a valid PDF file."
+            )
+
+        temp_path = None
+
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="wb",
+                suffix=".pdf",
+                delete=False,
+            ) as temp_file:
+                temp_file.write(pdf_bytes)
+                temp_path = Path(temp_file.name)
+
+            print(
+                f"\nPDF received: {filename}"
+            )
+
+            # -----------------------------------------
+            # READ PDF USING CUSTOM CREWAI TOOL
+            # -----------------------------------------
+
+            reader = DrawingPDFReaderTool()
+
+            pdf_result = reader.run(
+                file_path=str(temp_path)
+            )
+
+            print(
+                "\n================ PDF READER ================\n"
+            )
+
+            print(pdf_result)
+
+            if not pdf_result.startswith(
+                "PDF_READ_SUCCESS"
+            ):
+                raise RuntimeError(
+                    "PDF could not be read."
+                )
+
+            self.state._internal["pdf_text"] = pdf_result
+            self.state._internal["drawing_filename"] = filename
+
+            return pdf_result
+
+        finally:
+            if temp_path and temp_path.exists():
+                try:
+                    temp_path.unlink()
+                except Exception:
+                    pass
 
 
-    @listen(choose_and_read_pdf)
+    @listen(receive_and_read_pdf)
     def classify_drawing(self, pdf_result):
 
         # -----------------------------------------
@@ -335,18 +378,19 @@ Reason: <short evidence-based reason>
 
             return "Not Found"
 
+        data = self.state._internal
 
-        self.state.drawing_title = get_field(
+        data["drawing_title"] = get_field(
             classification_result,
             "Drawing Title",
         )
 
-        self.state.drawing_number = get_field(
+        data["drawing_number"] = get_field(
             classification_result,
             "Drawing Number",
         )
 
-        self.state.discipline = get_field(
+        data["discipline"] = get_field(
             classification_result,
             "Discipline",
         )
@@ -356,7 +400,7 @@ Reason: <short evidence-based reason>
             "Confidence",
         )
 
-        self.state.reason = get_field(
+        data["reason"] = get_field(
             classification_result,
             "Reason",
         )
@@ -367,11 +411,11 @@ Reason: <short evidence-based reason>
         )
 
         if confidence_match:
-            self.state.confidence = int(
+            data["confidence"] = int(
                 confidence_match.group(1)
             )
         else:
-            self.state.confidence = 0
+            data["confidence"] = 0
 
         return classification_result
 
@@ -379,91 +423,66 @@ Reason: <short evidence-based reason>
     @listen(classify_drawing)
     def route_by_confidence(self):
 
+        data = self.state._internal
+
         # -----------------------------------------
         # ROUTING RULE
         # -----------------------------------------
 
-        if self.state.confidence >= 80:
+        if data.get("confidence", 0) >= 80:
 
-            self.state.routing_decision = (
+            data["routing_decision"] = (
                 f"Auto-route to "
-                f"{self.state.discipline} workflow"
+                f"{data.get('discipline', 'Other')} workflow"
             )
 
-            self.state.human_review_required = "No"
-
-            self.state.reviewer_name = "N/A"
-
-            self.state.final_discipline = (
-                self.state.discipline
+            data["human_review_required"] = "No"
+            data["reviewer_name"] = "N/A"
+            data["final_discipline"] = data.get(
+                "discipline",
+                "Other",
             )
-
-            self.state.final_action = (
+            data["final_action"] = (
                 "Automatically Routed"
             )
 
         else:
 
-            self.state.routing_decision = (
+            data["routing_decision"] = (
                 "Send for Human Review"
             )
 
-            self.state.human_review_required = "Yes"
+            data["human_review_required"] = "Yes"
+            data["reviewer_name"] = "Pending"
+            data["final_discipline"] = "Pending Human Review"
+            data["final_action"] = "Awaiting Human Review"
 
             print(
-                "\n================ "
-                "HUMAN REVIEW REQUIRED "
-                "================\n"
+                "\n================ HUMAN REVIEW REQUIRED ================\n"
             )
 
             print(
                 f"AI Classification: "
-                f"{self.state.discipline}"
+                f"{data.get('discipline', 'Not Found')}"
             )
 
             print(
                 f"Confidence: "
-                f"{self.state.confidence}%"
+                f"{data.get('confidence', 0)}%"
             )
 
             print(
                 f"Reason: "
-                f"{self.state.reason}"
+                f"{data.get('reason', 'Not Found')}"
             )
 
-            reviewer_name = input(
-                "\nReviewer Name: "
-            ).strip()
-
-            final_discipline = input(
-                "\nEnter Final Discipline "
-                "(Architectural / Structural / "
-                "MEP / Civil / Other): "
-            ).strip()
-
-            if not reviewer_name:
-                reviewer_name = "Not Provided"
-
-            if not final_discipline:
-                final_discipline = (
-                    self.state.discipline
-                )
-
-            self.state.reviewer_name = (
-                reviewer_name
-            )
-
-            self.state.final_discipline = (
-                final_discipline
-            )
-
-            self.state.final_action = (
-                "Human Reviewed and Routed"
-            )
+        return data["routing_decision"]
 
 
     @listen(route_by_confidence)
     def create_audit_record(self):
+
+        data = self.state._internal
 
         # -----------------------------------------
         # CREATE FINAL AUDIT RECORD
@@ -476,22 +495,22 @@ Reason: <short evidence-based reason>
         audit_record = f"""
 ================ FINAL AUDIT RECORD ================
 
-Drawing Title: {self.state.drawing_title}
-Drawing Number: {self.state.drawing_number}
-Discipline: {self.state.discipline}
-Confidence: {self.state.confidence}%
-Classification Reason: {self.state.reason}
-Routing Decision: {self.state.routing_decision}
-Human Review Required: {self.state.human_review_required}
-Reviewer Name: {self.state.reviewer_name}
-Final Discipline: {self.state.final_discipline}
+Drawing Title: {data.get("drawing_title", "Not Found")}
+Drawing Number: {data.get("drawing_number", "Not Found")}
+Discipline: {data.get("discipline", "Not Found")}
+Confidence: {data.get("confidence", 0)}%
+Classification Reason: {data.get("reason", "Not Found")}
+Routing Decision: {data.get("routing_decision", "Not Found")}
+Human Review Required: {data.get("human_review_required", "Not Found")}
+Reviewer Name: {data.get("reviewer_name", "Not Found")}
+Final Discipline: {data.get("final_discipline", "Not Found")}
 Date/Time: {date_time}
-Final Action: {self.state.final_action}
+Final Action: {data.get("final_action", "Not Found")}
 
 ====================================================
 """
 
-        self.state.audit_record = audit_record
+        data["audit_record"] = audit_record
 
         print(audit_record)
 
@@ -518,26 +537,6 @@ Final Action: {self.state.final_action}
         )
 
         return audit_record
-
-
-# -------------------------------------------------
-# CREWAI CLI ENTRY POINT
-# -------------------------------------------------
-
-def kickoff():
-
-    flow = ProjectDrawingClassifierFlow()
-
-    return flow.kickoff()
-
-
-def plot():
-
-    flow = ProjectDrawingClassifierFlow()
-
-    return flow.plot(
-        "ProjectDrawingClassifierFlow"
-    )
 
 
 # -------------------------------------------------
