@@ -1,0 +1,68 @@
+
+    ================ FINAL AUDIT RECORD ================
+
+    Drawing Title: ARCHITECTURAL FLOOR PLAN AT +1'-6" FROM PORCH LEVEL
+    Drawing Number: AR/01
+    Discipline: Architectural
+    Confidence: 95%
+    Classification Reason: The explicit drawing title ("ARCHITECTURAL FLOOR PLAN...") and drawing number prefix ("AR/01") strongly indicate an architectural drawing, supported by room layout labels (LAB ENGR, STORE) and door/window tags (D1, D2, W1, W2), overriding the general project name.
+    Routing Decision: Auto-route to Architectural workflow
+    Human Review Required: No
+    Reviewer Name: N/A
+    Final Discipline: Architectural
+    Date/Time: 2026-09-13 13:08:15
+    Final Action: Automatically Routed
+
+    ====================================================
+    
+
+    ================ FINAL AUDIT RECORD ================
+
+    Drawing Title: ARCHITECTURAL FLOOR PLAN AT +1'-6" FROM PORCH LEVEL
+    Drawing Number: AR/01
+    Discipline: Architectural
+    Confidence: 95%
+    Classification Reason: The explicit drawing title ("ARCHITECTURAL FLOOR PLAN..."), drawing number prefix ("AR/01"), and architectural elements such as room names, area calculations, stair indicators, and door/window designations (D1, D2, W1, W2) provide strong evidence for an Architectural discipline.
+    Routing Decision: Auto-route to Architectural workflow
+    Human Review Required: No
+    Reviewer Name: N/A
+    Final Discipline: Architectural
+    Date/Time: 2026-09-13 13:11:14
+    Final Action: Automatically Routed
+
+    ====================================================
+    
+
+    ================ FINAL AUDIT RECORD ================
+
+    Drawing Title: ARCHITECTURAL FLOOR PLAN AT +1'-6" FROM PORCH LEVEL
+    Drawing Number: AR/01
+    Discipline: Architectural
+    Confidence: 95%
+    Classification Reason: The explicit drawing title incorporates "ARCHITECTURAL FLOOR PLAN" and the drawing number uses the standard architectural prefix "AR/01". The content further supports this with architectural layout features including space labels (LAB ENGR, STORE, LAB AREA), door and window marks (D1, D2, W1, W2), and finish floor level annotations.
+    Routing Decision: Auto-route to Architectural workflow
+    Human Review Required: No
+    Reviewer Name: N/A
+    Final Discipline: Architectural
+    Date/Time: 2026-09-13 13:30:22
+    Final Action: Automatically Routed
+
+    ====================================================
+    
+
+================ FINAL AUDIT RECORD ================
+
+Drawing Title: ARCHITECTURAL FLOOR PLAN AT +1'-6" FROM PORCH LEVEL
+Drawing Number: AR/01
+Discipline: Architectural
+Confidence: 98%
+Classification Reason: Explicit drawing title ("ARCHITECTURAL FLOOR PLAN"), drawing number prefix ("AR/01"), and architectural content (room layouts, porch levels, door and window tags D1, D2, W1, W2) provide definitive evidence of an Architectural discipline drawing despite the general project title.
+Routing Decision: Auto-route to Architectural workflow
+Human Review Required: No
+Reviewer Name: N/A
+Final Discipline: Architectural
+Date/Time: 2026-09-13 13:52:52
+Final Action: Automatically Routed
+
+====================================================
+

@@ -1,0 +1,51 @@
+
+================ FINAL AUDIT RECORD ================
+
+Drawing Title: ARCHITECTURAL FLOOR PLAN AT +1'-6" FROM PORCH LEVEL
+Drawing Number: AR/01
+Discipline: Architectural
+Confidence: 95%
+Classification Reason: The explicit drawing title ("ARCHITECTURAL FLOOR PLAN...") and drawing number prefix ("AR/01"), alongside room layouts and door/window tags (D1, D2, W1, W2), provide strong and direct evidence of an Architectural drawing.
+Routing Decision: Auto-route to Architectural workflow
+Human Review Required: No
+Reviewer Name: N/A
+Final Discipline: Architectural
+Date/Time: 2026-09-13 12:42:35
+Final Action: Automatically Routed
+
+====================================================
+
+
+================ FINAL AUDIT RECORD ================
+
+Drawing Title: ARCHITECTURAL FLOOR PLAN AT +1'-6" FROM PORCH LEVEL
+Drawing Number: AR/01
+Discipline: Architectural
+Confidence: 95%
+Classification Reason: Explicit drawing title ("ARCHITECTURAL FLOOR PLAN"), prefix "AR" in drawing number AR/01, and standard architectural content including door/window schedules (D1, D2, W1, W2), space labels (LAB ENGR, STORE), and level indications.
+Routing Decision: Send for Human Review
+Human Review Required: Yes
+Reviewer Name: 
+Final Discipline: architectural
+Date/Time: 2026-09-13 12:49:19
+Final Action: Human Reviewed and Routed
+
+====================================================
+
+
+================ FINAL AUDIT RECORD ================
+
+Drawing Title: ARCHITECTURAL FLOOR PLAN AT +1'-6" FROM PORCH LEVEL
+Drawing Number: AR/01
+Discipline: Architectural
+Confidence: 95%
+Classification Reason: The drawing title explicitly states "ARCHITECTURAL FLOOR PLAN", the drawing prefix "AR" denotes Architectural, and the sheet features architectural content such as room schedules, door/window tags (D1, D2, W1, W2), and spatial layouts.
+Routing Decision: Auto-route to Architectural workflow
+Human Review Required: No
+Reviewer Name: N/A
+Final Discipline: Architectural
+Date/Time: 2026-09-13 12:55:19
+Final Action: Automatically Routed
+
+====================================================
+

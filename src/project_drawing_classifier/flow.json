@@ -1,0 +1,244 @@
+{
+  "name": "ProjectDrawingClassifier",
+  "state": {
+    "type": "json_schema",
+    "json_schema": {
+      "type": "object",
+      "required": [
+        "drawing_file"
+      ],
+      "properties": {
+        "discipline": {
+          "type": "string"
+        },
+        "audit_record": {
+          "type": "object",
+          "properties": {
+            "date_time": {
+              "type": "string"
+            },
+            "discipline": {
+              "type": "string"
+            },
+            "final_action": {
+              "type": "string"
+            },
+            "drawing_title": {
+              "type": "string"
+            },
+            "reviewer_name": {
+              "type": "string"
+            },
+            "confidence_pct": {
+              "type": "number"
+            },
+            "drawing_number": {
+              "type": "string"
+            },
+            "final_discipline": {
+              "type": "string"
+            },
+            "routing_decision": {
+              "type": "string"
+            },
+            "classification_reason": {
+              "type": "string"
+            },
+            "human_review_required": {
+              "type": "string"
+            }
+          }
+        },
+        "drawing_file": {
+          "type": "string"
+        },
+        "final_action": {
+          "type": "string"
+        },
+        "drawing_title": {
+          "type": "string"
+        },
+        "reviewer_name": {
+          "type": "string"
+        },
+        "confidence_pct": {
+          "type": "number"
+        },
+        "drawing_number": {
+          "type": "string"
+        },
+        "extracted_info": {
+          "type": "string"
+        },
+        "drawing_metadata": {
+          "type": "string"
+        },
+        "final_discipline": {
+          "type": "string"
+        },
+        "routing_decision": {
+          "type": "string"
+        },
+        "classification_reason": {
+          "type": "string"
+        },
+        "human_review_required": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "schema": "crewai.flow/v1",
+  "methods": {
+    "receive_drawing": {
+      "do": {
+        "call": "agent",
+        "with": {
+          "goal": "Receive and acknowledge the uploaded project drawing file and any accompanying metadata, confirming the input is ready for processing.",
+          "role": "Drawing Intake Specialist",
+          "input": "Drawing file: ${state.drawing_file}\nAdditional metadata (if any): ${state.drawing_metadata}\n\nConfirm the drawing has been received and summarize what input is available (file reference and any metadata fields present). If no drawing file is provided, output: NO DATA: drawing_file was not supplied.\n\nExpected output: A brief confirmation of the received drawing, listing the file reference and any metadata fields present. If no drawing file was supplied, output exactly: NO DATA: drawing_file was not supplied.",
+          "verbose": true,
+          "backstory": "You handle incoming drawing submissions. You confirm what has been received and pass it along accurately. You only work from what is actually provided — you never invent or assume file contents or metadata.",
+          "inject_date": true,
+          "llm": "openai/gpt-5.6-luna"
+        }
+      },
+      "start": true,
+      "router": false,
+      "description": "Accept the uploaded drawing file and any available metadata as the starting input."
+    },
+    "classify_drawing": {
+      "do": {
+        "call": "agent",
+        "with": {
+          "goal": "Classify a project drawing into one of the defined discipline categories based on its extracted information, and report confidence and reasoning.",
+          "role": "Drawing Classification Specialist",
+          "input": "Extracted drawing information:\n${outputs.extract_drawing_info.raw}\n\nClassify this drawing into exactly one of these disciplines: Architectural, Structural, MEP, Civil, or Other.\n\nReturn your answer in this exact format:\nDiscipline: <discipline>\nConfidence: <number between 0 and 100>%\nReason: <one or two sentences explaining the classification based on the drawing content>\n\nIf the input contains NO DATA, output exactly: NO DATA: drawing information returned nothing.\n\nExpected output: A classification result in the format:\nDiscipline: [Architectural|Structural|MEP|Civil|Other]\nConfidence: [0-100]%\nReason: [Short explanation based on drawing content]\n\nIf the source returned nothing, output exactly: NO DATA: drawing information returned nothing.",
+          "verbose": true,
+          "backstory": "You are an expert in construction and engineering document classification. You identify drawing disciplines by analysing title blocks, drawing numbers, notes, symbols, and labels. You only classify based on evidence present in the extracted information \\ u2014 you never guess or invent details. When evidence is ambiguous or insufficient, you classify as Other and report a low confidence score.",
+          "inject_date": true,
+          "llm": "openai/gpt-5.6-luna"
+        }
+      },
+      "listen": "extract_drawing_info",
+      "router": false,
+      "description": "Classify the drawing as Architectural, Structural, MEP, Civil, or Other. Return discipline, confidence %, and a short reason."
+    },
+    "confidence_router": {
+      "do": {
+        "call": "expression",
+        "expr": "outputs.route_by_confidence.raw.contains('Routing: auto_route') ? 'auto_route' : 'human_review'"
+      },
+      "emit": [
+        "auto_route",
+        "human_review"
+      ],
+      "listen": "route_by_confidence",
+      "router": true,
+      "description": "Reads the routing decision from the classification agent and emits either auto_route or human_review."
+    },
+    "handle_auto_route": {
+      "do": {
+        "call": "agent",
+        "with": {
+          "goal": "Record the automatic routing decision for a high-confidence drawing, setting Reviewer Name to N/A and preparing the complete record for audit logging.",
+          "role": "Auto-Route Processing Agent",
+          "input": "Extracted drawing info:\n${outputs.extract_drawing_info.raw}\n\nClassification result:\n${outputs.classify_drawing.raw}\n\nRouting decision:\n${outputs.route_by_confidence.raw}\n\nCompile the following record fields from the above information:\n- Drawing Title (from extracted info)\n- Drawing Number (from extracted info)\n- Discipline (from classification)\n- Confidence % (from routing decision)\n- Classification Reason (from classification)\n- Routing Decision: Auto-Routed\n- Human Review Required: No\n- Reviewer Name: N/A\n- Final Discipline (same as Discipline)\n- Final Action: Auto-routed to [discipline] workflow\n\nOutput each field clearly labelled.\n\nExpected output: A complete, labelled record with all fields populated: Drawing Title, Drawing Number, Discipline, Confidence %, Classification Reason, Routing Decision (Auto-Routed), Human Review Required (No), Reviewer Name (N/A), Final Discipline, Final Action. If source data is missing, state which field could not be populated.",
+          "verbose": true,
+          "backstory": "You handle high-confidence drawings that have been routed automatically. You compile all available classification and routing information into a complete structured record. You only use data from the classification and routing outputs \\ u2014 you never invent values.",
+          "inject_date": true,
+          "llm": "openai/gpt-5.6-luna"
+        }
+      },
+      "listen": "auto_route",
+      "router": false,
+      "description": "For high-confidence drawings (≥ 80%), save the full record automatically with Reviewer Name set to N/A, confidence score, and routing decision."
+    },
+    "handle_human_review": {
+      "do": {
+        "call": "agent",
+        "with": {
+          "goal": "Prepare a clear human review request for a low-confidence drawing classification, and once a reviewer decision is available, compile the complete record including reviewer name, corrected discipline, and final action.",
+          "role": "Human Review Coordinator",
+          "input": "Extracted drawing info:\n${outputs.extract_drawing_info.raw}\n\nClassification result (low confidence):\n${outputs.classify_drawing.raw}\n\nRouting decision:\n${outputs.route_by_confidence.raw}\n\nThis drawing has been flagged for human review because confidence is below 80%.\n\nCompile a human review record with the following fields:\n- Drawing Title (from extracted info)\n- Drawing Number (from extracted info)\n- Discipline (AI-suggested, from classification)\n- Confidence % (from routing decision)\n- Classification Reason (from classification)\n- Routing Decision: Sent for Human Review\n- Human Review Required: Yes\n- Reviewer Name: [To be completed by reviewer]\n- Final Discipline: [To be confirmed or corrected by reviewer]\n- Final Action: Pending human review decision\n\nOutput each field clearly labelled, marking reviewer-dependent fields as pending.\n\nExpected output: A complete, labelled human review record with all available fields populated, and reviewer-dependent fields (Reviewer Name, Final Discipline, Final Action) clearly marked as pending review. Routing Decision must be: Sent for Human Review. Human Review Required must be: Yes.",
+          "verbose": true,
+          "backstory": "You manage the human review queue for drawings where the AI classification confidence is below the 80% threshold. You present the classification information clearly so a reviewer can confirm or correct it. You compile the final record using only the data provided \\ u2014 you never invent reviewer names or decisions.",
+          "inject_date": true,
+          "llm": "openai/gpt-5.6-luna"
+        }
+      },
+      "listen": "human_review",
+      "router": false,
+      "description": "For low-confidence drawings (< 80%), prompt a human to confirm or correct the discipline, then prepare the record for final saving with reviewer details."
+    },
+    "route_by_confidence": {
+      "do": {
+        "call": "agent",
+        "with": {
+          "goal": "Parse the classification result to extract the confidence score, then decide whether the drawing should be auto-routed or sent for human review.",
+          "role": "Routing Decision Agent",
+          "input": "Classification result:\n${outputs.classify_drawing.raw}\n\nParse the confidence percentage from the classification result. Then output a routing decision in this exact format:\nConfidence: <number>%\nRouting: <auto_route OR human_review>\nDiscipline: <discipline>\nReason: <reason from classification>\n\nRule: if confidence >= 80, routing = auto_route. If confidence < 80, routing = human_review.\nIf the classification contains NO DATA, set routing = human_review and note the reason.\n\nExpected output: A routing decision in the format:\nConfidence: [number]%\nRouting: [auto_route|human_review]\nDiscipline: [discipline]\nReason: [reason]",
+          "verbose": true,
+          "backstory": "You read classification results and extract the numeric confidence score. You apply a simple rule: 80% or above means auto-route; below 80% means human review. You only work from the classification output provided.",
+          "inject_date": true,
+          "llm": "openai/gpt-5.6-luna"
+        }
+      },
+      "listen": "classify_drawing",
+      "router": false,
+      "description": "Parse the classification result to extract the confidence score and determine routing: auto_route (≥ 80%) or human_review (< 80%)."
+    },
+    "extract_drawing_info": {
+      "do": {
+        "call": "agent",
+        "with": {
+          "goal": "Extract all relevant information from a project drawing, including the title block, drawing number, notes, symbols, labels, and any embedded metadata.",
+          "role": "Drawing Information Extractor",
+          "input": "Drawing file reference and intake confirmation:\n${outputs.receive_drawing.raw}\n\nExtract and return the following fields from the drawing:\n- Drawing Title\n- Drawing Number\n- Notes (key notes found on the drawing)\n- Symbols and labels identified\n- Any other relevant metadata\n\nIf the input contains NO DATA or the drawing file is missing, output exactly: NO DATA: drawing file returned nothing.\n\nExpected output: A structured list of extracted drawing information including: Drawing Title, Drawing Number, Notes, Symbols/Labels, and any other relevant metadata. If the source returned nothing, output exactly: NO DATA: drawing file returned nothing.",
+          "verbose": true,
+          "backstory": "You are a specialist in reading engineering and architectural drawings. You carefully extract structured information from title blocks and drawing content. You only report what is actually present in the input \\ u2014 you never invent or guess at drawing contents.",
+          "inject_date": true,
+          "llm": "openai/gpt-5.6-luna"
+        }
+      },
+      "listen": "receive_drawing",
+      "router": false,
+      "description": "Read the title block, drawing number, notes, symbols, labels, and metadata from the drawing."
+    },
+    "record_auto_route_result": {
+      "do": {
+        "call": "agent",
+        "with": {
+          "goal": "Produce and save the final, complete audit record for an automatically routed drawing, including all mandatory fields.",
+          "role": "Audit Record Writer",
+          "input": "Auto-route record compiled by the previous step:\n${outputs.handle_auto_route.raw}\n\nProduce the final audit record with the following fields, in this order:\n1. Drawing Title\n2. Drawing Number\n3. Discipline\n4. Confidence %\n5. Classification Reason\n6. Routing Decision\n7. Human Review Required\n8. Reviewer Name\n9. Final Discipline\n10. Date/Time (use the current date and time at the moment this record is written)\n11. Final Action\n\nLabel each field clearly. This is the official audit record for this drawing.\n\nExpected output: A fully labelled, complete audit record with all 11 fields populated in order. Reviewer Name must be N/A. Human Review Required must be No. Date/Time must reflect the actual current time of record creation.",
+          "verbose": true,
+          "backstory": "You are responsible for creating immutable audit records for processed drawings. You assemble each record from the data provided and output it in a clear, complete format. You never invent data \\ u2014 if a field cannot be determined from the inputs, you note it explicitly.",
+          "inject_date": true,
+          "llm": "openai/gpt-5.6-luna"
+        }
+      },
+      "listen": "handle_auto_route",
+      "router": false,
+      "description": "Save the complete audit record for an automatically routed drawing, including all required fields with Reviewer Name = N/A."
+    },
+    "record_human_review_result": {
+      "do": {
+        "call": "agent",
+        "with": {
+          "goal": "Produce and save the final, complete audit record for a human-reviewed drawing, including all reviewer details and the confirmed final discipline.",
+          "role": "Audit Record Writer",
+          "input": "Human review record compiled by the previous step:\n${outputs.handle_human_review.raw}\n\nProduce the final audit record with the following fields, in this order:\n1. Drawing Title\n2. Drawing Number\n3. Discipline (AI-suggested)\n4. Confidence %\n5. Classification Reason\n6. Routing Decision\n7. Human Review Required\n8. Reviewer Name (from review record; if pending, note as: Pending reviewer input)\n9. Final Discipline (reviewer-confirmed; if pending, note as: Pending reviewer input)\n10. Date/Time (use the current date and time at the moment this record is written)\n11. Final Action (reviewer decision; if pending, note as: Pending reviewer input)\n\nLabel each field clearly. This is the official audit record for this drawing.\n\nExpected output: A fully labelled, complete audit record with all 11 fields populated in order. Human Review Required must be Yes. Reviewer Name, Final Discipline, and Final Action must reflect the reviewer's input, or clearly note if still pending. Date/Time must reflect the actual current time of record creation.",
+          "verbose": true,
+          "backstory": "You are responsible for creating immutable audit records for drawings that went through human review. You assemble each record from the review data provided and output it in a clear, complete format. You never invent reviewer names, disciplines, or decisions \\ u2014 if a field is still pending, you note it explicitly.",
+          "inject_date": true,
+          "llm": "openai/gpt-5.6-luna"
+        }
+      },
+      "listen": "handle_human_review",
+      "router": false,
+      "description": "Save the complete audit record for a human-reviewed drawing, including reviewer name, final discipline, date/time, and final action."
+    }
+  },
+  "description": "Classifies uploaded project drawings as Architectural, Structural, MEP, Civil, or Other. Extracts drawing metadata, applies AI classification with confidence scoring, routes high-confidence drawings automatically and low-confidence drawings for human review, then saves a complete audit record."
+}
