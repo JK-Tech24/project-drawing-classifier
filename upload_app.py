@@ -18,7 +18,10 @@ CREWAI_URL = os.getenv(
     "https://project-drawing-classifier-7b38518f-ab2d-42-33e4f1d2.crewai.com",
 ).rstrip("/")
 
-CREWAI_API_TOKEN = os.getenv("CREWAI_API_TOKEN", "")
+try:
+    CREWAI_API_TOKEN = st.secrets["CREWAI_API_TOKEN"]
+except Exception:
+    CREWAI_API_TOKEN = os.getenv("CREWAI_API_TOKEN", "")
 
 
 # ---------------------------------------------------------
