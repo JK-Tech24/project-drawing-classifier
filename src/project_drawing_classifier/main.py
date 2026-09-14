@@ -248,10 +248,10 @@ Other Relevant Metadata:
 
             role="Drawing Classification Specialist",
 
-            goal=(
-                "Classify construction and engineering drawings "
-                "accurately into Architectural, Structural, "
-                "MEP, Civil, or Other."
+         goal=(
+                 "Classify construction and engineering drawings accurately, "
+                 "detect any mismatch between the stated discipline and the actual "
+                 "drawing content, and route mismatches for human review."
             ),
 
             backstory=(
@@ -294,8 +294,35 @@ Consider:
 
 Do not classify using only one isolated phrase.
 
-If conflicting information exists, weigh the strongest evidence,
-especially the explicit drawing title and drawing number.
+Determine the ACTUAL discipline from the overall drawing content,
+symbols, annotations, room/layout information, terminology,
+drawing features and other discipline-specific evidence.
+
+Also identify the discipline explicitly stated in the drawing title,
+drawing number prefix, title block or metadata.
+
+If the actual drawing content indicates a different discipline from
+the stated discipline, report a Discipline Mismatch.
+
+Do not automatically trust the written title if the drawing content
+clearly indicates another discipline.
+
+Example:
+
+If the drawing content is clearly Architectural but the title says
+Structural, classify the detected discipline as Architectural and return:
+
+Detected Discipline: Architectural
+Stated Discipline: Structural
+Discipline Match: No
+Mismatch Warning: Drawing content is Architectural, but the drawing title states Structural.
+Recommended Action: Review and correct the drawing title/metadata before routing.
+
+If the detected discipline and stated discipline agree:
+
+Discipline Match: Yes
+Mismatch Warning: None
+Recommended Action: None
 
 Confidence:
 
@@ -309,14 +336,19 @@ Return exactly:
 
 Drawing Title: <title>
 Drawing Number: <number>
-Discipline: <discipline>
+Detected Discipline: <discipline determined from actual drawing content>
+Stated Discipline: <discipline stated in drawing title, drawing number, or metadata>
+Discipline Match: <Yes or No>
 Confidence: <number>%
 Reason: <short evidence-based reason>
+Mismatch Warning: <warning if mismatch exists, otherwise None>
+Recommended Action: <action required if mismatch exists, otherwise None>
 """,
 
             expected_output=(
-                "Drawing Title, Drawing Number, Discipline, "
-                "Confidence percentage and classification reason."
+                "Drawing Title, Drawing Number, Detected Discipline, "
+                "Stated Discipline, Discipline Match, Confidence percentage, "
+                "classification reason, mismatch warning and recommended action."
             ),
 
             agent=classifier,
@@ -325,6 +357,7 @@ Reason: <short evidence-based reason>
                 extract_task
             ],
         )
+
 
         # -----------------------------------------
         # RUN CREW
@@ -390,10 +423,23 @@ Reason: <short evidence-based reason>
             "Drawing Number",
         )
 
-        data["discipline"] = get_field(
+        data["detected_discipline"] = get_field(
             classification_result,
-            "Discipline",
+            "Detected Discipline",
         )
+
+        data["stated_discipline"] = get_field(
+            classification_result,
+            "Stated Discipline",
+        )
+
+        data["discipline_match"] = get_field(
+            classification_result,
+            "Discipline Match",
+        )
+
+        # Keep the existing discipline key for downstream routing.
+        data["discipline"] = data["detected_discipline"]
 
         confidence_text = get_field(
             classification_result,
@@ -403,6 +449,16 @@ Reason: <short evidence-based reason>
         data["reason"] = get_field(
             classification_result,
             "Reason",
+        )
+
+        data["mismatch_warning"] = get_field(
+            classification_result,
+            "Mismatch Warning",
+        )
+
+        data["recommended_action"] = get_field(
+            classification_result,
+            "Recommended Action",
         )
 
         confidence_match = re.search(
@@ -429,7 +485,56 @@ Reason: <short evidence-based reason>
         # ROUTING RULE
         # -----------------------------------------
 
-        if data.get("confidence", 0) >= 80:
+        discipline_match = (
+            str(data.get("discipline_match", "No"))
+            .strip()
+            .lower()
+        )
+
+        mismatch_exists = discipline_match in {
+            "no",
+            "false",
+            "mismatch",
+        }
+
+        if mismatch_exists:
+
+            data["routing_decision"] = (
+                "Send for Human Review - Discipline Mismatch"
+            )
+
+            data["human_review_required"] = "Yes"
+            data["reviewer_name"] = "Pending"
+            data["final_discipline"] = "Pending Human Review"
+            data["final_action"] = (
+                "Awaiting Human Review - Discipline Mismatch"
+            )
+
+            print(
+                "\n================ DISCIPLINE MISMATCH ================\n"
+            )
+
+            print(
+                f"Detected Discipline: "
+                f"{data.get('detected_discipline', 'Not Found')}"
+            )
+
+            print(
+                f"Stated Discipline: "
+                f"{data.get('stated_discipline', 'Not Found')}"
+            )
+
+            print(
+                f"Mismatch Warning: "
+                f"{data.get('mismatch_warning', 'Not Found')}"
+            )
+
+            print(
+                f"Recommended Action: "
+                f"{data.get('recommended_action', 'Not Found')}"
+            )
+
+        elif data.get("confidence", 0) >= 80:
 
             data["routing_decision"] = (
                 f"Auto-route to "
@@ -497,9 +602,13 @@ Reason: <short evidence-based reason>
 
 Drawing Title: {data.get("drawing_title", "Not Found")}
 Drawing Number: {data.get("drawing_number", "Not Found")}
-Discipline: {data.get("discipline", "Not Found")}
+Detected Discipline: {data.get("detected_discipline", "Not Found")}
+Stated Discipline: {data.get("stated_discipline", "Not Found")}
+Discipline Match: {data.get("discipline_match", "Not Found")}
 Confidence: {data.get("confidence", 0)}%
 Classification Reason: {data.get("reason", "Not Found")}
+Mismatch Warning: {data.get("mismatch_warning", "Not Found")}
+Recommended Action: {data.get("recommended_action", "Not Found")}
 Routing Decision: {data.get("routing_decision", "Not Found")}
 Human Review Required: {data.get("human_review_required", "Not Found")}
 Reviewer Name: {data.get("reviewer_name", "Not Found")}
