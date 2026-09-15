@@ -16,7 +16,7 @@ load_dotenv(override=True)
 
 CREWAI_URL = os.getenv(
     "CREWAI_URL",
-    "https://project-drawing-classifier-7b38518f-ab2d-42-33e4f1d2.crewai.com",
+    "https://project-drawing-classifier-95bdbf62-9abd-45-65c4192b.crewai.com",
 ).rstrip("/")
 
 try:
