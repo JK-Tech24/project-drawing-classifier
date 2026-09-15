@@ -2774,7 +2774,7 @@ wheels = [
 
 [[package]]
 name = "project-drawing-classifier"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "." }
 dependencies = [
     { name = "crewai", extra = ["file-processing", "google-genai", "litellm", "tools"] },
